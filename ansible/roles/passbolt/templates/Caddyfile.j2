@@ -16,7 +16,7 @@
         remove Server
     }
 
-    reverse_passbolt passbolt:8080 {
+    reverse_proxy passbolt:8080 {
         header_up Host {host}
         header_up X-Real-IP {remote}
         header_up X-Forwarded-For {remote}
@@ -32,6 +32,6 @@
     }
 
     handle @api {
-        reverse_passbolt passbolt:8080
+        reverse_proxy passbolt:8080
     }
 }
