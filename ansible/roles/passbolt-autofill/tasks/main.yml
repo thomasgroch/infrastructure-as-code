@@ -73,6 +73,13 @@
     mode: '0750'
   tags: [autofill, test]
 
+- name: Deploy browser-based test
+  template:
+    src: test_browser.py.j2
+    dest: /opt/passbolt-autofill/test_browser.py
+    mode: '0750'
+  tags: [autofill, test, browser]
+
 - name: Configure ansible-pull for auto-updates
   include_tasks: setup_ansible_pull.yml
   tags: [autopull]

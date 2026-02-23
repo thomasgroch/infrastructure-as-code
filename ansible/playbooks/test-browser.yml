@@ -1,0 +1,46 @@
+---
+# Browser-based integration test for Passbolt
+# Uses Selenium to verify the web UI is working
+
+- name: Verify Passbolt Web UI via Browser
+  hosts: localhost
+  become: yes
+  gather_facts: no
+
+  vars:
+    test_url: "https://{{ passbolt_domain }}"
+    test_timeout: 30
+
+  tasks:
+    - name: Check if Chrome is installed
+      stat:
+        path: /usr/bin/google-chrome-stable
+      register: chrome_check
+
+    - name: Skip browser tests if Chrome not available
+      debug:
+        msg: "Chrome not installed, skipping browser tests"
+      when: not chrome_check.stat.exists
+
+    - name: Run browser-based health check
+      command: >
+        python3 /opt/passbolt-autofill/test_browser.py
+        --url {{ test_url }}
+        --timeout {{ test_timeout }}
+      register: browser_test
+      changed_when: false
+      ignore_errors: yes
+      when: chrome_check.stat.exists
+
+    - name: Display browser test results
+      debug:
+        msg: "{{ browser_test.stdout_lines | default(['No output']) }}"
+      when: chrome_check.stat.exists and browser_test is defined
+
+    - name: Fail if browser test failed
+      fail:
+        msg: "Browser-based test failed: {{ browser_test.stderr }}"
+      when:
+        - chrome_check.stat.exists
+        - browser_test is defined
+        - browser_test.rc != 0

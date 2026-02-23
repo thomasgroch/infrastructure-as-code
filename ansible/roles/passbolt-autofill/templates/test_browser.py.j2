@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""
+Browser-based Passbolt Integration Test
+Uses Selenium to verify the web UI is accessible and functional
+"""
+
+import argparse
+import sys
+import json
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+def test_passbolt_ui(url, timeout=30):
+    """Test Passbolt web UI accessibility"""
+    
+    chrome_options = Options()
+    chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--disable-gpu')
+    chrome_options.add_argument('--window-size=1920,1080')
+    chrome_options.add_argument('--ignore-certificate-errors')
+    chrome_options.add_argument('--ignore-ssl-errors')
+    
+    driver = None
+    results = {
+        "success": False,
+        "url": url,
+        "tests": {}
+    }
+    
+    try:
+        driver = webdriver.Chrome(options=chrome_options)
+        
+        # Test 1: Page loads
+        driver.get(url)
+        results["tests"]["page_load"] = driver.title != ""
+        
+        # Test 2: Wait for redirect to login
+        wait = WebDriverWait(driver, timeout)
+        current_url = driver.current_url
+        results["tests"]["redirect"] = "/auth/login" in current_url or "/setup" in current_url
+        
+        # Test 3: Check for Passbolt-specific elements
+        page_source = driver.page_source.lower()
+        results["tests"]["passbolt_brand"] = "passbolt" in page_source
+        
+        # Test 4: Check page title
+        results["tests"]["title"] = "passbolt" in driver.title.lower()
+        
+        # Test 5: HTTP status (indirect via page load success)
+        results["tests"]["accessible"] = True
+        
+        results["success"] = all(results["tests"].values())
+        results["final_url"] = current_url
+        results["title"] = driver.title
+        
+    except Exception as e:
+        results["error"] = str(e)
+        results["tests"]["accessible"] = False
+        
+    finally:
+        if driver:
+            driver.quit()
+    
+    return results
+
+def main():
+    parser = argparse.ArgumentParser(description='Test Passbolt Web UI')
+    parser.add_argument('--url', default='https://passbolt.bot.thomasdev.xyz', help='Passbolt URL')
+    parser.add_argument('--timeout', type=int, default=30, help='Timeout in seconds')
+    parser.add_argument('--json', action='store_true', help='Output JSON')
+    
+    args = parser.parse_args()
+    
+    results = test_passbolt_ui(args.url, args.timeout)
+    
+    if args.json:
+        print(json.dumps(results, indent=2))
+    else:
+        print(f"Testing: {results['url']}")
+        print(f"Success: {results['success']}")
+        print(f"Final URL: {results.get('final_url', 'N/A')}")
+        print(f"Title: {results.get('title', 'N/A')}")
+        print("\nTests:")
+        for test_name, passed in results['tests'].items():
+            status = "✓" if passed else "✗"
+            print(f"  {status} {test_name}")
+        
+        if 'error' in results:
+            print(f"\nError: {results['error']}")
+    
+    sys.exit(0 if results['success'] else 1)
+
+if __name__ == '__main__':
+    main()

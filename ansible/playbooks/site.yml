@@ -25,6 +25,7 @@
     - ssl
     - passbolt
     - firewall
+    - openclaw-browser
     - passbolt-autofill
 
   post_tasks:

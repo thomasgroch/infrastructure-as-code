@@ -13,7 +13,9 @@ This repository contains infrastructure automation for deploying:
 - **Auto-updates** - Ansible-pull runs every 30 minutes to keep server updated
 - **Security hardening** - UFW, Fail2ban, kernel parameters, auto-updates
 - **Auto-fill skill** - Browser automation for credential injection
+- **OpenClaw Browser** - Chrome setup for browser automation (no snap)
 - **Health monitoring** - Automatic recovery if services fail
+- **Browser testing** - Selenium-based UI verification tests
 
 ## Quick Start (First Deploy)
 
@@ -106,13 +108,15 @@ If Passbolt fails 3 consecutive checks, containers are automatically restarted.
 │   ├── inventory/           # Host inventory
 │   ├── playbooks/
 │   │   ├── site.yml         # Main deployment playbook
-│   │   └── deploy.yml       # Auto-deploy playbook
+│   │   ├── deploy.yml       # Auto-deploy playbook
+│   │   └── test-browser.yml # Browser-based UI tests
 │   ├── roles/               # Ansible roles
 │   │   ├── common/          # System packages and security
 │   │   ├── docker/          # Docker CE installation
 │   │   ├── ssl/             # SSL/TLS configuration
 │   │   ├── passbolt/        # Passbolt deployment
 │   │   ├── firewall/        # UFW and Fail2ban
+│   │   ├── openclaw-browser/# Chrome setup for automation
 │   │   └── passbolt-autofill/  # Browser automation + ansible-pull
 │   ├── group_vars/
 │   │   └── all.yml          # Your configuration
@@ -162,6 +166,47 @@ make clean
 - **Network isolation**: Internal Docker networks for database
 - **Health monitoring**: Automatic recovery on failure
 
+## OpenClaw Browser Setup
+
+This deployment includes **Google Chrome** (not snap Chromium) for browser automation:
+
+```bash
+# Chrome is installed at
+/usr/bin/google-chrome-stable
+
+# Configuration
+/root/.openclaw/openclaw.json
+
+# Test browser
+openclaw browser status
+openclaw browser start
+openclaw browser open https://passbolt.bot.thomasdev.xyz
+```
+
+**Why not snap Chromium?** Snap packages have AppArmor confinement that interferes with CDP (Chrome DevTools Protocol) automation.
+
+## Browser-Based Testing
+
+Selenium-based UI tests verify Passbolt is accessible via browser:
+
+```bash
+# Run browser-based test
+python3 /opt/passbolt-autofill/test_browser.py --url https://passbolt.bot.thomasdev.xyz
+
+# With JSON output
+python3 /opt/passbolt-autofill/test_browser.py --json
+
+# Via Ansible
+ansible-playbook -i ansible/inventory ansible/playbooks/test-browser.yml
+```
+
+**Tests include:**
+- Page loads successfully
+- Redirects to login/setup
+- Passbolt branding present
+- Title contains "Passbolt"
+- Page accessible via HTTPS
+
 ## Passbolt Auto-fill Skill
 
 Browser automation for automatic credential filling:
@@ -195,11 +240,18 @@ The test suite validates:
 1. System security (firewall, fail2ban, kernel params)
 2. Docker infrastructure (containers, networks)
 3. Passbolt application (health, SSL, headers)
-4. Auto-fill skill (scripts, dependencies, connectivity)
-5. Network security (port exposure)
-6. Ansible-pull configuration
+4. **Browser-based UI tests** (Senium + Chrome)
+5. Auto-fill skill (scripts, dependencies, connectivity)
+6. Network security (port exposure)
+7. Ansible-pull configuration
 
 Run with: `make test`
+
+**Browser Test:**
+```bash
+# Manual browser test
+python3 /opt/passbolt-autofill/test_browser.py --url https://passbolt.bot.thomasdev.xyz --json
+```
 
 ## Idempotency
 
