@@ -22,7 +22,7 @@ echo ""
 
 # Run Ansible syntax check first
 echo "→ Checking Ansible syntax..."
-ansible-playbook -i "$SCRIPT_DIR/../ansible/inventory" "$SCRIPT_DIR/../ansible/playbooks/site.yml" --syntax-check
+cd "$SCRIPT_DIR/../ansible" && ansible-playbook playbooks/site.yml --syntax-check
 
 echo -e "${GREEN}✓${NC} Ansible syntax OK"
 echo ""
