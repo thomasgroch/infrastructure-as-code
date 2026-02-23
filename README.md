@@ -2,10 +2,14 @@
 
 Idempotent Ansible deployment for Passbolt password manager with **auto-updates via ansible-pull**, security hardening, and browser auto-fill capabilities.
 
+**Domain:** `bot.thomasdev.xyz`  
+**Apps Pattern:** `*.bot.thomasdev.xyz`  
+**Contact:** `thomas@buildaut.com`
+
 ## Overview
 
 This repository contains infrastructure automation for deploying:
-- **Passbolt** - Open source password manager
+- **Passbolt** - Open source password manager (at `passbolt.bot.thomasdev.xyz`)
 - **Auto-updates** - Ansible-pull runs every 30 minutes to keep server updated
 - **Security hardening** - UFW, Fail2ban, kernel parameters, auto-updates
 - **Auto-fill skill** - Browser automation for credential injection
@@ -28,11 +32,19 @@ make deploy
 
 | Setting | Value |
 |---------|-------|
-| Domain | `pass.bot.stage.selections.buildaut.com.au` |
-| Admin Email | `thomas@buildaut.com.au` |
-| Admin Name | Thomas Buildaut |
+| Base Domain | `bot.thomasdev.xyz` |
+| Passbolt Domain | `passbolt.bot.thomasdev.xyz` |
+| Admin Email | `thomas@buildaut.com` |
+| Admin Name | Thomas Dev |
 | Auto-update | Every 30 minutes via ansible-pull |
 | Health Check | Every 5 minutes via systemd timer |
+
+## Subdomain Structure
+
+| Subdomain | Service |
+|-----------|---------|
+| `passbolt.bot.thomasdev.xyz` | Password manager |
+| `*.bot.thomasdev.xyz` | Future applications |
 
 ## Auto-Update System (Ansible-Pull)
 
@@ -81,7 +93,9 @@ If Passbolt fails 3 consecutive checks, containers are automatically restarted.
 
 - Ubuntu 22.04+ / Debian 12+
 - Root or sudo access
-- Domain `pass.bot.stage.selections.buildaut.com.au` pointed to server
+- DNS configured:
+  - `passbolt.bot.thomasdev.xyz` → Server IP
+  - `*.bot.thomasdev.xyz` → Server IP (for future apps)
 - Ports 22, 80, 443 open
 
 ## Project Structure
@@ -105,7 +119,7 @@ If Passbolt fails 3 consecutive checks, containers are automatically restarted.
 │   └── ansible.cfg
 ├── tests/
 │   └── run-tests.sh         # Integration test suite
-├── Makefile
+├── Makefile                 # Common tasks
 └── README.md
 ```
 
@@ -165,6 +179,15 @@ passbolt-autofill fill "https://github.com/login" "github-account"
 # Run tests
 passbolt-autofill test
 ```
+
+## Adding New Applications
+
+To add a new app at `appname.bot.thomasdev.xyz`:
+
+1. Create new role: `ansible/roles/appname/`
+2. Add to `ansible/playbooks/site.yml`
+3. Update Caddy config for new subdomain
+4. Push to GitHub - server auto-updates
 
 ## Testing
 

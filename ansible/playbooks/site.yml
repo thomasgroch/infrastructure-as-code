@@ -3,24 +3,19 @@
 # Ansible playbook for idempotent Passbolt deployment with security hardening
 # and Passbolt browser extension auto-fill capability
 # This playbook is designed to be run via ansible-pull every 30 minutes
+# Domain: bot.thomasdev.xyz
 
 - name: Deploy Passbolt Infrastructure
   hosts: all
   become: yes
   gather_facts: yes
 
-  vars:
-    # Force these variables for this deployment
-    passbolt_domain: "pass.bot.stage.selections.buildaut.com.au"
-    passbolt_admin_email: "thomas@buildaut.com.au"
-    passbolt_admin_first_name: "Thomas"
-    passbolt_admin_last_name: "Buildaut"
-
   pre_tasks:
     - name: Display deployment info
       debug:
         msg:
           - "Deploying Passbolt to: {{ passbolt_domain }}"
+          - "Base domain: {{ base_domain | default('not set') }}"
           - "Admin email: {{ passbolt_admin_email }}"
           - "Timestamp: {{ ansible_date_time.iso8601 }}"
 

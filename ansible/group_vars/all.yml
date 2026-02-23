@@ -1,13 +1,19 @@
 ---
 # Group variables for Passbolt servers
+# Domain: bot.thomasdev.xyz
+# Apps pattern: *.bot.thomasdev.xyz
 
 # Passbolt configuration
-passbolt_domain: "pass.bot.stage.selections.buildaut.com.au"
+passbolt_domain: "passbolt.bot.thomasdev.xyz"
 
 # Admin configuration
-passbolt_admin_email: "thomas@buildaut.com.au"
+passbolt_admin_email: "thomas@buildaut.com"
 passbolt_admin_first_name: "Thomas"
-passbolt_admin_last_name: "Buildaut"
+passbolt_admin_last_name: "Dev"
+
+# Base domain for all applications
+base_domain: "bot.thomasdev.xyz"
+contact_email: "thomas@buildaut.com"
 
 # Auto-update configuration
 git_repo: "https://github.com/thomasgroch/infrastructure-as-code.git"
