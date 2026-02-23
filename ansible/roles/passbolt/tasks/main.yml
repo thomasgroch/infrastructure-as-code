@@ -1,0 +1,84 @@
+---
+# Deploy Passbolt password manager
+
+- name: Ensure Passbolt directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0750'
+    owner: root
+    group: docker
+  loop:
+    - "{{ passbolt_base_dir }}"
+    - "{{ passbolt_base_dir }}/data"
+    - "{{ passbolt_base_dir }}/data/gpg"
+    - "{{ passbolt_base_dir }}/data/mysql"
+  tags: [passbolt, directories]
+
+- name: Deploy Passbolt Docker Compose
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ passbolt_base_dir }}/docker-compose.yml"
+    mode: '0640'
+  register: compose_file
+  tags: [passbolt, compose]
+
+- name: Deploy Passbolt environment file
+  template:
+    src: passbolt.env.j2
+    dest: "{{ passbolt_base_dir }}/.env"
+    mode: '0600'
+  no_log: yes
+  tags: [passbolt, config]
+
+- name: Deploy Caddyfile for reverse proxy
+  template:
+    src: Caddyfile.j2
+    dest: "{{ passbolt_base_dir }}/Caddyfile"
+    mode: '0640'
+  register: caddyfile
+  tags: [passbolt, caddy]
+
+- name: Pull latest images
+  command: docker compose pull
+  args:
+    chdir: "{{ passbolt_base_dir }}"
+  when: compose_file.changed or caddyfile.changed
+  tags: [passbolt, docker]
+
+- name: Start Passbolt services
+  command: docker compose up -d --remove-orphans
+  args:
+    chdir: "{{ passbolt_base_dir }}"
+  register: docker_up
+  changed_when: "'Started' in docker_up.stdout or 'Running' not in docker_up.stdout"
+  tags: [passbolt, docker]
+
+- name: Wait for Passbolt to be healthy
+  uri:
+    url: "https://{{ passbolt_domain }}/health/status"
+    method: GET
+    status_code: 200
+    validate_certs: no
+  register: health_check
+  retries: 30
+  delay: 5
+  until: health_check.status == 200
+  tags: [passbolt, health]
+
+- name: Create initial admin user (if not exists)
+  command: >
+    docker compose exec -T passbolt su -c "/usr/share/php/passbolt/bin/cake 
+    passbolt register_user 
+    -u {{ passbolt_admin_email }} 
+    -f {{ passbolt_admin_first_name }} 
+    -l {{ passbolt_admin_last_name }} 
+    -r admin" -s /bin/bash www-data
+  args:
+    chdir: "{{ passbolt_base_dir }}"
+  register: admin_create
+  changed_when: "'successfully' in admin_create.stdout"
+  failed_when: 
+    - admin_create.rc != 0
+    - "'already registered' not in admin_create.stderr"
+  tags: [passbolt, admin]

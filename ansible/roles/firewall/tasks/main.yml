@@ -1,0 +1,58 @@
+---
+# Firewall configuration with UFW
+
+- name: Reset UFW to default state
+  ufw:
+    state: reset
+  tags: [firewall, reset]
+
+- name: Set default policies
+  ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop:
+    - { direction: incoming, policy: deny }
+    - { direction: outgoing, policy: allow }
+    - { direction: routed, policy: deny }
+  tags: [firewall, policy]
+
+- name: Allow SSH
+  ufw:
+    rule: limit
+    port: "{{ ssh_port | default('22') }}"
+    proto: tcp
+  tags: [firewall, ssh]
+
+- name: Allow HTTP
+  ufw:
+    rule: allow
+    port: '80'
+    proto: tcp
+  tags: [firewall, http]
+
+- name: Allow HTTPS
+  ufw:
+    rule: allow
+    port: '443'
+    proto: tcp
+  tags: [firewall, https]
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+  tags: [firewall, enable]
+
+- name: Configure Fail2ban
+  template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    mode: '0644'
+  notify: restart fail2ban
+  tags: [firewall, fail2ban]
+
+- name: Ensure Fail2ban is running
+  service:
+    name: fail2ban
+    state: started
+    enabled: yes
+  tags: [firewall, fail2ban]

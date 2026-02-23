@@ -1,0 +1,37 @@
+{{ passbolt_domain }} {
+    tls {
+        on_demand
+    }
+
+    encode gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        remove Server
+    }
+
+    reverse_passbolt passbolt:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    @api {
+        path /auth/*
+        path /users/*
+        path /resources/*
+        path /folders/*
+        path /share/*
+    }
+
+    handle @api {
+        reverse_passbolt passbolt:8080
+    }
+}

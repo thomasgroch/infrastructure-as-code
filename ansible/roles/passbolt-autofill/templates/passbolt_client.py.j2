@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""
+Passbolt API Client
+Handles authentication and credential retrieval from Passbolt
+"""
+
+import requests
+import json
+import os
+from urllib.parse import urljoin
+
+class PassboltClient:
+    def __init__(self, base_url, private_key=None, passphrase=None):
+        self.base_url = base_url.rstrip('/')
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        })
+        self.private_key = private_key
+        self.passphrase = passphrase
+        self.auth_token = None
+        
+    def health_check(self):
+        """Verify Passbolt is responding"""
+        try:
+            response = self.session.get(
+                urljoin(self.base_url, '/healthcheck/status.json'),
+                verify=False,
+                timeout=10
+            )
+            return response.status_code == 200
+        except Exception as e:
+            return False
+    
+    def authenticate(self, username, password):
+        """Authenticate with Passbolt and get session token"""
+        try:
+            # Step 1: Get CSRF token
+            response = self.session.get(
+                urljoin(self.base_url, '/auth/login'),
+                verify=False
+            )
+            
+            # Step 2: Login
+            login_data = {
+                'data': {
+                    'gpg_auth': {
+                        'keyid': username
+                    }
+                }
+            }
+            
+            response = self.session.post(
+                urljoin(self.base_url, '/auth/login'),
+                json=login_data,
+                verify=False
+            )
+            
+            if response.status_code == 200:
+                self.auth_token = response.headers.get('X-GPGAuth-Token')
+                return True
+            return False
+        except Exception as e:
+            print(f"Auth error: {e}")
+            return False
+    
+    def get_password(self, resource_id):
+        """Retrieve a specific password from Passbolt"""
+        try:
+            response = self.session.get(
+                urljoin(self.base_url, f'/resources/{resource_id}.json'),
+                verify=False,
+                headers={'X-GPGAuth-Token': self.auth_token} if self.auth_token else {}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('body', {}).get('secrets', [{}])[0].get('data')
+            return None
+        except Exception as e:
+            print(f"Get password error: {e}")
+            return None
+    
+    def search_resources(self, search_term):
+        """Search for resources by name or URI"""
+        try:
+            response = self.session.get(
+                urljoin(self.base_url, '/resources.json'),
+                params={'filter[search]': search_term},
+                verify=False,
+                headers={'X-GPGAuth-Token': self.auth_token} if self.auth_token else {}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return data.get('body', [])
+            return []
+        except Exception as e:
+            print(f"Search error: {e}")
+            return []
+
+if __name__ == '__main__':
+    import sys
+    
+    if len(sys.argv) < 2:
+        print("Usage: passbolt_client.py <command> [args]")
+        sys.exit(1)
+    
+    cmd = sys.argv[1]
+    base_url = os.getenv('PASSBOLT_URL', 'https://localhost')
+    
+    client = PassboltClient(base_url)
+    
+    if cmd == 'health':
+        print(json.dumps({"healthy": client.health_check()}))
+    elif cmd == 'search':
+        term = sys.argv[2] if len(sys.argv) > 2 else ''
+        results = client.search_resources(term)
+        print(json.dumps(results, indent=2))

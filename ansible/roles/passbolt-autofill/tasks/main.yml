@@ -1,0 +1,73 @@
+---
+# Passbolt Browser Extension Auto-fill Skill
+# Installs and configures browser automation for Passbolt credential injection
+
+- name: Ensure browser automation dependencies
+  apt:
+    name:
+      - chromium-browser
+      - chromium-chromedriver
+      - xvfb
+      - python3-selenium
+      - python3-requests
+    state: present
+  tags: [autofill, deps]
+
+- name: Create autofill scripts directory
+  file:
+    path: /opt/passbolt-autofill
+    state: directory
+    mode: '0750'
+    owner: root
+    group: root
+  tags: [autofill, dirs]
+
+- name: Deploy Passbolt API client
+  template:
+    src: passbolt_client.py.j2
+    dest: /opt/passbolt-autofill/passbolt_client.py
+    mode: '0750'
+  tags: [autofill, client]
+
+- name: Deploy browser automation script
+  template:
+    src: browser_autofill.py.j2
+    dest: /opt/passbolt-autofill/browser_autofill.py
+    mode: '0750'
+  tags: [autofill, browser]
+
+- name: Deploy autofill skill wrapper
+  template:
+    src: autofill_skill.sh.j2
+    dest: /usr/local/bin/passbolt-autofill
+    mode: '0755'
+  tags: [autofill, skill]
+
+- name: Create autofill configuration
+  template:
+    src: autofill.conf.j2
+    dest: /etc/passbolt-autofill.conf
+    mode: '0600'
+    owner: root
+    group: root
+  no_log: yes
+  tags: [autofill, config]
+
+- name: Verify Passbolt API connectivity
+  uri:
+    url: "https://{{ passbolt_domain }}/healthcheck/status.json"
+    method: GET
+    status_code: 200
+    validate_certs: no
+  register: passbolt_health
+  retries: 5
+  delay: 10
+  until: passbolt_health.status == 200
+  tags: [autofill, verify]
+
+- name: Deploy test suite
+  template:
+    src: test_autofill.py.j2
+    dest: /opt/passbolt-autofill/test_autofill.py
+    mode: '0750'
+  tags: [autofill, test]

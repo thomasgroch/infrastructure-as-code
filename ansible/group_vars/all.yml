@@ -1,0 +1,19 @@
+---
+# Group variables for Passbolt servers
+
+# Passbolt configuration
+passbolt_domain: "{{ lookup('env', 'PASSBOLT_DOMAIN') | default('passbolt.local', true) }}"
+
+# Admin configuration
+passbolt_admin_email: "{{ lookup('env', 'PASSBOLT_ADMIN_EMAIL') | default('admin@' + passbolt_domain, true) }}"
+passbolt_admin_first_name: "{{ lookup('env', 'PASSBOLT_ADMIN_FIRST_NAME') | default('Admin', true) }}"
+passbolt_admin_last_name: "{{ lookup('env', 'PASSBOLT_ADMIN_LAST_NAME') | default('User', true) }}"
+
+# SMTP configuration (optional)
+smtp_host: "{{ lookup('env', 'SMTP_HOST') | default('', true) }}"
+smtp_port: "{{ lookup('env', 'SMTP_PORT') | default('587', true) }}"
+smtp_user: "{{ lookup('env', 'SMTP_USER') | default('', true) }}"
+smtp_password: "{{ lookup('env', 'SMTP_PASSWORD') | default('', true) }}"
+
+# Security
+ssh_port: "{{ lookup('env', 'SSH_PORT') | default('22', true) }}"

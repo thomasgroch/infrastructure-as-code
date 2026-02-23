@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""
+Browser Auto-fill Automation
+Uses Selenium to fill login forms with Passbolt credentials
+"""
+
+import sys
+import os
+import json
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from passbolt_client import PassboltClient
+
+class PassboltAutofill:
+    def __init__(self, passbolt_url, headless=True):
+        self.passbolt_url = passbolt_url
+        self.headless = headless
+        self.driver = None
+        self.passbolt = PassboltClient(passbolt_url)
+        
+    def init_browser(self):
+        """Initialize Chrome browser with security settings"""
+        chrome_options = Options()
+        
+        if self.headless:
+            chrome_options.add_argument('--headless=new')
+        
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--window-size=1920,1080')
+        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+        chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        
+        # Security: Disable insecure protocols
+        chrome_options.add_argument('--disable-web-security')
+        chrome_options.add_argument('--allow-running-insecure-content')
+        
+        service = Service('/usr/bin/chromedriver')
+        self.driver = webdriver.Chrome(service=service, options=chrome_options)
+        self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        
+    def find_login_fields(self):
+        """Detect common login field selectors"""
+        selectors = {
+            'username': [
+                'input[type="email"]',
+                'input[name="email"]',
+                'input[name="username"]',
+                'input[name="user"]',
+                'input[name="login"]',
+                'input[id*="email" i]',
+                'input[id*="user" i]',
+                'input[id*="login" i]',
+            ],
+            'password': [
+                'input[type="password"]',
+                'input[name="password"]',
+                'input[name="pass"]',
+                'input[id*="password" i]',
+                'input[id*="pass" i]',
+            ],
+            'submit': [
+                'button[type="submit"]',
+                'input[type="submit"]',
+                'button:contains("Login")',
+                'button:contains("Sign in")',
+                'button[id*="login" i]',
+                'button[id*="submit" i]',
+            ]
+        }
+        
+        fields = {}
+        
+        for field_type, selector_list in selectors.items():
+            for selector in selector_list:
+                try:
+                    element = self.driver.find_element(By.CSS_SELECTOR, selector)
+                    if element.is_displayed():
+                        fields[field_type] = element
+                        break
+                except:
+                    continue
+        
+        return fields
+    
+    def autofill(self, target_url, resource_name):
+        """Main autofill routine"""
+        try:
+            # Search for credentials in Passbolt
+            resources = self.passbolt.search_resources(resource_name)
+            
+            if not resources:
+                return {"success": False, "error": "Resource not found in Passbolt"}
+            
+            resource = resources[0]
+            username = resource.get('username', '')
+            password = self.passbolt.get_password(resource.get('id'))
+            
+            if not password:
+                return {"success": False, "error": "Could not retrieve password"}
+            
+            # Navigate to target
+            self.driver.get(target_url)
+            time.sleep(2)  # Wait for page load
+            
+            # Find and fill login fields
+            fields = self.find_login_fields()
+            
+            if 'username' not in fields or 'password' not in fields:
+                return {"success": False, "error": "Could not find login fields"}
+            
+            # Fill credentials
+            fields['username'].clear()
+            fields['username'].send_keys(username)
+            
+            fields['password'].clear()
+            fields['password'].send_keys(password)
+            
+            # Submit form
+            if 'submit' in fields:
+                fields['submit'].click()
+            else:
+                fields['password'].submit()
+            
+            # Wait for navigation
+            time.sleep(3)
+            
+            return {
+                "success": True,
+                "current_url": self.driver.current_url,
+                "title": self.driver.title
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+    
+    def close(self):
+        if self.driver:
+            self.driver.quit()
+
+def main():
+    if len(sys.argv) < 3:
+        print("Usage: browser_autofill.py <target_url> <resource_name>")
+        sys.exit(1)
+    
+    target_url = sys.argv[1]
+    resource_name = sys.argv[2]
+    passbolt_url = os.getenv('PASSBOLT_URL', 'https://localhost')
+    
+    autofill = PassboltAutofill(passbolt_url)
+    
+    try:
+        autofill.init_browser()
+        result = autofill.autofill(target_url, resource_name)
+        print(json.dumps(result, indent=2))
+    finally:
+        autofill.close()
+
+if __name__ == '__main__':
+    main()

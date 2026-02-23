@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  db:
+    image: mariadb:10.11
+    container_name: passbolt-db
+    restart: unless-stopped
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "true"
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    networks:
+      - passbolt-internal
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u", "${MYSQL_USER}", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  passbolt:
+    image: passbolt/passbolt:latest-ce
+    container_name: passbolt-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_FULL_BASE_URL: https://${APP_DOMAIN}
+      DATASOURCES_DEFAULT_HOST: db
+      DATASOURCES_DEFAULT_USERNAME: ${MYSQL_USER}
+      DATASOURCES_DEFAULT_PASSWORD: ${MYSQL_PASSWORD}
+      DATASOURCES_DEFAULT_DATABASE: ${MYSQL_DATABASE}
+      EMAIL_TRANSPORT_DEFAULT_HOST: ${SMTP_HOST}
+      EMAIL_TRANSPORT_DEFAULT_PORT: ${SMTP_PORT}
+      EMAIL_TRANSPORT_DEFAULT_USERNAME: ${SMTP_USER}
+      EMAIL_TRANSPORT_DEFAULT_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_TRANSPORT_DEFAULT_TLS: "true"
+      PASSBOLT_REGISTRATION_PUBLIC: "false"
+      PASSBOLT_SSL_FORCE: "true"
+      PASSBOLT_SECURITY_HTML_HEADERS: "true"
+    volumes:
+      - ./data/gpg:/etc/passbolt/gpg
+      - ./data/jwt:/etc/passbolt/jwt
+    networks:
+      - passbolt-internal
+      - caddy-network
+    labels:
+      caddy: "{{ passbolt_domain }}"
+      caddy.reverse_proxy: "{{ '{{upstreams 8080}}' }}"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: passbolt-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - caddy-network
+    labels:
+      caddy.controlled: "true"
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  passbolt-internal:
+    internal: true
+  caddy-network:

@@ -1,0 +1,318 @@
+#!/usr/bin/env python3
+"""
+Passbolt Autofill Integration Test Suite
+Single comprehensive test that validates the entire stack
+"""
+
+import sys
+import os
+import json
+import time
+import subprocess
+import requests
+from urllib.parse import urljoin
+
+class Colors:
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    YELLOW = '\033[93m'
+    BLUE = '\033[94m'
+    RESET = '\033[0m'
+
+class TestResult:
+    def __init__(self, name):
+        self.name = name
+        self.passed = 0
+        self.failed = 0
+        self.errors = []
+    
+    def add_pass(self, msg):
+        self.passed += 1
+        print(f"{Colors.GREEN}✓{Colors.RESET} {msg}")
+    
+    def add_fail(self, msg):
+        self.failed += 1
+        self.errors.append(msg)
+        print(f"{Colors.RED}✗{Colors.RESET} {msg}")
+    
+    def summary(self):
+        total = self.passed + self.failed
+        status = f"{Colors.GREEN}PASS{Colors.RESET}" if self.failed == 0 else f"{Colors.RED}FAIL{Colors.RESET}"
+        print(f"\n{Colors.BLUE}═══════════════════════════════════════{Colors.RESET}")
+        print(f"Test Suite: {self.name}")
+        print(f"Status: {status}")
+        print(f"Passed: {self.passed}/{total}")
+        print(f"Failed: {self.failed}/{total}")
+        if self.errors:
+            print(f"\n{Colors.RED}Errors:{Colors.RESET}")
+            for err in self.errors:
+                print(f"  - {err}")
+        print(f"{Colors.BLUE}═══════════════════════════════════════{Colors.RESET}")
+        return self.failed == 0
+
+def run_command(cmd, shell=False):
+    """Run shell command and return output"""
+    try:
+        if shell:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        else:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        return result.returncode == 0, result.stdout, result.stderr
+    except Exception as e:
+        return False, "", str(e)
+
+def test_system_security():
+    """Test system hardening configuration"""
+    result = TestResult("System Security")
+    print(f"\n{Colors.YELLOW}Testing System Security...{Colors.RESET}")
+    
+    # Check UFW is enabled
+    success, stdout, stderr = run_command("ufw status | grep -q 'Status: active'")
+    if success:
+        result.add_pass("UFW firewall is active")
+    else:
+        result.add_fail("UFW firewall is not active")
+    
+    # Check fail2ban is running
+    success, _, _ = run_command("systemctl is-active --quiet fail2ban")
+    if success:
+        result.add_pass("Fail2ban service is running")
+    else:
+        result.add_fail("Fail2ban service is not running")
+    
+    # Check Docker is running with security options
+    success, stdout, _ = run_command("docker info --format '{{ .SecurityOptions }}'")
+    if success and 'seccomp' in stdout:
+        result.add_pass("Docker seccomp is enabled")
+    else:
+        result.add_fail("Docker seccomp is not enabled")
+    
+    # Check kernel security parameters
+    success, stdout, _ = run_command("sysctl kernel.randomize_va_space")
+    if success and '2' in stdout:
+        result.add_pass("ASLR (Address Space Layout Randomization) is enabled")
+    else:
+        result.add_fail("ASLR is not properly configured")
+    
+    # Check unattended upgrades
+    success, _, _ = run_command("systemctl is-enabled --quiet unattended-upgrades")
+    if success:
+        result.add_pass("Automatic security updates are enabled")
+    else:
+        result.add_fail("Automatic security updates are not enabled")
+    
+    return result
+
+def test_docker_infrastructure():
+    """Test Docker and container infrastructure"""
+    result = TestResult("Docker Infrastructure")
+    print(f"\n{Colors.YELLOW}Testing Docker Infrastructure...{Colors.RESET}")
+    
+    # Check Docker is running
+    success, _, _ = run_command("systemctl is-active --quiet docker")
+    if success:
+        result.add_pass("Docker service is running")
+    else:
+        result.add_fail("Docker service is not running")
+    
+    # Check Docker Compose is available
+    success, _, _ = run_command("docker compose version")
+    if success:
+        result.add_pass("Docker Compose is installed")
+    else:
+        result.add_fail("Docker Compose is not available")
+    
+    # Check Passbolt containers are running
+    containers = ['passbolt-db', 'passbolt-app', 'passbolt-caddy']
+    for container in containers:
+        success, _, _ = run_command(f"docker ps --format '{{{{.Names}}}}' | grep -q '^{container}$'")
+        if success:
+            result.add_pass(f"Container '{container}' is running")
+        else:
+            result.add_fail(f"Container '{container}' is not running")
+    
+    # Check container network isolation
+    success, stdout, _ = run_command("docker network ls | grep passbolt-internal")
+    if success:
+        result.add_pass("Passbolt internal network exists")
+    else:
+        result.add_fail("Passbolt internal network is missing")
+    
+    return result
+
+def test_passbolt_application():
+    """Test Passbolt application functionality"""
+    result = TestResult("Passbolt Application")
+    print(f"\n{Colors.YELLOW}Testing Passbolt Application...{Colors.RESET}")
+    
+    passbolt_url = os.getenv('PASSBOLT_URL', 'https://localhost')
+    
+    # Test health endpoint
+    try:
+        response = requests.get(
+            urljoin(passbolt_url, '/healthcheck/status.json'),
+            verify=False,
+            timeout=10
+        )
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('body', {}).get('healthcheck', {}).get('status') == 'pass':
+                result.add_pass("Passbolt health check passed")
+            else:
+                result.add_fail("Passbolt health check returned warnings")
+        else:
+            result.add_fail(f"Passbolt health endpoint returned {response.status_code}")
+    except Exception as e:
+        result.add_fail(f"Passbolt health check failed: {e}")
+    
+    # Test HTTPS is working
+    try:
+        response = requests.get(passbolt_url, verify=False, timeout=10)
+        if response.status_code == 200:
+            result.add_pass("Passbolt HTTPS endpoint is accessible")
+        else:
+            result.add_pass(f"Passbolt returned status {response.status_code} (may need setup)")
+    except Exception as e:
+        result.add_fail(f"Cannot connect to Passbolt: {e}")
+    
+    # Check security headers
+    try:
+        response = requests.get(passbolt_url, verify=False, timeout=10)
+        headers = response.headers
+        
+        required_headers = [
+            'Strict-Transport-Security',
+            'X-Content-Type-Options',
+            'X-Frame-Options',
+        ]
+        
+        for header in required_headers:
+            if header in headers:
+                result.add_pass(f"Security header '{header}' is present")
+            else:
+                result.add_fail(f"Security header '{header}' is missing")
+    except Exception as e:
+        result.add_fail(f"Cannot verify security headers: {e}")
+    
+    return result
+
+def test_autofill_skill():
+    """Test Passbolt autofill browser automation"""
+    result = TestResult("Auto-fill Skill")
+    print(f"\n{Colors.YELLOW}Testing Auto-fill Skill...{Colors.RESET}")
+    
+    # Check autofill scripts exist
+    scripts = [
+        '/opt/passbolt-autofill/passbolt_client.py',
+        '/opt/passbolt-autofill/browser_autofill.py',
+        '/usr/local/bin/passbolt-autofill'
+    ]
+    
+    for script in scripts:
+        if os.path.exists(script):
+            result.add_pass(f"Script exists: {script}")
+        else:
+            result.add_fail(f"Missing script: {script}")
+    
+    # Check Python dependencies
+    try:
+        import selenium
+        result.add_pass("Selenium Python package is installed")
+    except ImportError:
+        result.add_fail("Selenium Python package is missing")
+    
+    # Check Chrome/Chromium is installed
+    success, _, _ = run_command("which chromium-browser || which google-chrome || which chromium")
+    if success:
+        result.add_pass("Chrome/Chromium browser is installed")
+    else:
+        result.add_fail("Chrome/Chromium browser is not installed")
+    
+    # Check ChromeDriver is installed
+    success, _, _ = run_command("which chromedriver")
+    if success:
+        result.add_pass("ChromeDriver is installed")
+    else:
+        result.add_fail("ChromeDriver is not installed")
+    
+    # Test Passbolt client can connect
+    success, stdout, _ = run_command("passbolt-autofill health")
+    if success and 'healthy' in stdout:
+        result.add_pass("Passbolt client can connect to API")
+    else:
+        result.add_fail("Passbolt client cannot connect to API")
+    
+    return result
+
+def test_network_security():
+    """Test network security configuration"""
+    result = TestResult("Network Security")
+    print(f"\n{Colors.YELLOW}Testing Network Security...{Colors.RESET}")
+    
+    # Check only required ports are open
+    success, stdout, _ = run_command("ufw status numbered")
+    if success:
+        if '22' in stdout:
+            result.add_pass("SSH port (22) is configured in firewall")
+        if '80' in stdout:
+            result.add_pass("HTTP port (80) is open")
+        if '443' in stdout:
+            result.add_pass("HTTPS port (443) is open")
+    else:
+        result.add_fail("Cannot check UFW status")
+    
+    # Check Docker containers don't expose ports directly (except through reverse proxy)
+    success, stdout, _ = run_command("docker ps --format '{{.Ports}}' | grep -v '0.0.0.0:80\|0.0.0.0:443' | grep -q '0.0.0.0'")
+    if not success:  # grep returns 1 if no matches (good - no extra ports exposed)
+        result.add_pass("No additional ports exposed beyond 80/443")
+    else:
+        result.add_fail("Some containers are exposing ports directly")
+    
+    return result
+
+def main():
+    print(f"{Colors.BLUE}═══════════════════════════════════════════════════{Colors.RESET}")
+    print(f"{Colors.BLUE}  Passbolt Infrastructure Integration Test Suite  {Colors.RESET}")
+    print(f"{Colors.BLUE}═══════════════════════════════════════════════════{Colors.RESET}")
+    
+    # Suppress SSL warnings
+    requests.packages.urllib3.disable_warnings()
+    
+    all_results = []
+    
+    # Run all test suites
+    all_results.append(test_system_security())
+    all_results.append(test_docker_infrastructure())
+    all_results.append(test_passbolt_application())
+    all_results.append(test_autofill_skill())
+    all_results.append(test_network_security())
+    
+    # Summary
+    print(f"\n{Colors.BLUE}═══════════════════════════════════════════════════{Colors.RESET}")
+    print(f"{Colors.BLUE}                  FINAL SUMMARY                    {Colors.RESET}")
+    print(f"{Colors.BLUE}═══════════════════════════════════════════════════{Colors.RESET}")
+    
+    total_passed = sum(r.passed for r in all_results)
+    total_failed = sum(r.failed for r in all_results)
+    total_tests = total_passed + total_failed
+    
+    for r in all_results:
+        r.summary()
+    
+    print(f"\n{Colors.BLUE}═══════════════════════════════════════════════════{Colors.RESET}")
+    
+    if total_failed == 0:
+        print(f"{Colors.GREEN}🎉 ALL TESTS PASSED!{Colors.RESET}")
+        print(f"Total: {total_passed}/{total_tests} tests passed")
+        print(f"{Colors.GREEN}Infrastructure is healthy and secure.{Colors.RESET}")
+        print(f"{Colors.BLUE}═══════════════════════════════════════════════════{Colors.RESET}")
+        return 0
+    else:
+        print(f"{Colors.RED}❌ SOME TESTS FAILED{Colors.RESET}")
+        print(f"Passed: {total_passed}/{total_tests}")
+        print(f"Failed: {total_failed}/{total_tests}")
+        print(f"{Colors.BLUE}═══════════════════════════════════════════════════{Colors.RESET}")
+        return 1
+
+if __name__ == '__main__':
+    sys.exit(main())

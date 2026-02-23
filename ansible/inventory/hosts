@@ -1,0 +1,5 @@
+[passbolt_servers]
+localhost ansible_connection=local
+
+[passbolt_servers:vars]
+ansible_python_interpreter=/usr/bin/python3

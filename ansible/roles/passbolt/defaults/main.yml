@@ -1,0 +1,14 @@
+---
+# Passbolt role defaults
+
+passbolt_base_dir: /opt/passbolt
+passbolt_domain: passbolt.local
+passbolt_admin_email: admin@local
+passbolt_admin_first_name: Admin
+passbolt_admin_last_name: User
+
+# SMTP defaults (override in group_vars)
+smtp_host: ""
+smtp_port: "587"
+smtp_user: ""
+smtp_password: ""

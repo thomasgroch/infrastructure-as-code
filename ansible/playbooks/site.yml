@@ -1,0 +1,17 @@
+---
+# infrastructure-as-code
+# Ansible playbook for idempotent Passbolt deployment with security hardening
+# and Passbolt browser extension auto-fill capability
+
+- name: Deploy Passbolt Infrastructure
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  roles:
+    - common
+    - docker
+    - ssl
+    - passbolt
+    - firewall
+    - passbolt-autofill

@@ -1,0 +1,19 @@
+---
+# SSL/TLS configuration (handled by Caddy auto-TLS)
+# This role ensures SSL certificates directory exists
+
+- name: Ensure SSL directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/ssl/caddy
+    - /var/lib/caddy
+  tags: [ssl, directories]
+
+- name: Install certbot (backup SSL option)
+  apt:
+    name: certbot
+    state: present
+  tags: [ssl, certbot]
