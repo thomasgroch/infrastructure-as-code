@@ -39,7 +39,7 @@ services:
       EMAIL_TRANSPORT_DEFAULT_PASSWORD: ${SMTP_PASSWORD}
       EMAIL_TRANSPORT_DEFAULT_TLS: "true"
       PASSBOLT_REGISTRATION_PUBLIC: "false"
-      PASSBOLT_SSL_FORCE: "true"
+      PASSBOLT_SSL_FORCE: "false"
       PASSBOLT_SECURITY_HTML_HEADERS: "true"
     volumes:
       - ./data/gpg:/etc/passbolt/gpg
@@ -49,7 +49,7 @@ services:
       - caddy-network
     labels:
       caddy: "{{ passbolt_domain }}"
-      caddy.reverse_proxy: "{{ '{{upstreams 8080}}' }}"
+      caddy.reverse_proxy: "{{ '{{upstreams 80}}' }}"
 
   caddy:
     image: caddy:2-alpine
