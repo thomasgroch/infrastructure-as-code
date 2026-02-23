@@ -1,0 +1,40 @@
+---
+# Passbolt Auto-Deploy and Self-Update Configuration
+# This playbook configures ansible-pull for automatic updates
+
+- name: Configure Passbolt Auto-Deployment
+  hosts: localhost
+  become: yes
+  gather_facts: yes
+
+  vars:
+    passbolt_domain: "pass.bot.stage.selections.buildaut.com.au"
+    passbolt_admin_email: "thomas@buildaut.com.au"
+    passbolt_admin_first_name: "Thomas"
+    passbolt_admin_last_name: "Buildaut"
+    git_repo: "https://github.com/thomasgroch/infrastructure-as-code.git"
+    git_branch: "main"
+    ansible_pull_log: "/var/log/ansible-pull.log"
+    ansible_pull_schedule: "*/30 * * * *"  # Every 30 minutes
+    local_repo_path: "/opt/infrastructure-as-code"
+
+  pre_tasks:
+    - name: Ensure local repo directory exists
+      file:
+        path: "{{ local_repo_path }}"
+        state: directory
+        mode: '0750'
+      tags: [always]
+
+  roles:
+    - common
+    - docker
+    - ssl
+    - passbolt
+    - firewall
+    - passbolt-autofill
+
+  post_tasks:
+    - name: Configure ansible-pull for auto-updates
+      include_tasks: setup_ansible_pull.yml
+      tags: [autopull]

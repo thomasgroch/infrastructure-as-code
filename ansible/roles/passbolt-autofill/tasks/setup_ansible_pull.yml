@@ -1,0 +1,71 @@
+---
+# Setup ansible-pull for automatic updates
+
+- name: Install ansible-pull dependencies
+  apt:
+    name:
+      - ansible
+      - git
+      - cron
+    state: present
+  tags: [autopull, deps]
+
+- name: Ensure log file exists with proper permissions
+  file:
+    path: "{{ ansible_pull_log }}"
+    state: touch
+    mode: '0644'
+    owner: root
+    group: root
+  tags: [autopull, log]
+
+- name: Create ansible-pull wrapper script
+  template:
+    src: ansible-pull-wrapper.sh.j2
+    dest: /usr/local/bin/ansible-pull-wrapper
+    mode: '0755'
+    owner: root
+    group: root
+  tags: [autopull, script]
+
+- name: Configure cron for ansible-pull
+  cron:
+    name: "Ansible Pull - Auto-update infrastructure"
+    minute: "*/30"
+    hour: "*"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    job: "/usr/local/bin/ansible-pull-wrapper >> {{ ansible_pull_log }} 2>&1"
+    user: root
+    state: present
+  tags: [autopull, cron]
+
+- name: Add health check script
+  template:
+    src: health-check.sh.j2
+    dest: /usr/local/bin/passbolt-health-check
+    mode: '0755'
+  tags: [autopull, health]
+
+- name: Configure systemd timer for health checks (optional)
+  template:
+    src: passbolt-health.timer.j2
+    dest: /etc/systemd/system/passbolt-health.timer
+    mode: '0644'
+  tags: [autopull, systemd]
+
+- name: Configure systemd service for health checks
+  template:
+    src: passbolt-health.service.j2
+    dest: /etc/systemd/system/passbolt-health.service
+    mode: '0644'
+  tags: [autopull, systemd]
+
+- name: Enable and start health check timer
+  systemd:
+    name: passbolt-health.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  tags: [autopull, systemd]

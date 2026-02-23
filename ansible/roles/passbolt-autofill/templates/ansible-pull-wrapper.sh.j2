@@ -1,0 +1,54 @@
+#!/bin/bash
+# Ansible Pull Wrapper
+# Ensures idempotent deployment from Git repository
+
+set -e
+
+REPO_URL="{{ git_repo }}"
+BRANCH="{{ git_branch }}"
+LOCAL_PATH="{{ local_repo_path }}"
+LOCK_FILE="/var/run/ansible-pull.lock"
+LOG_FILE="{{ ansible_pull_log }}"
+
+# Prevent concurrent runs
+exec 200>"$LOCK_FILE"
+if ! flock -n 200; then
+    echo "[$(date)] Another ansible-pull instance is running. Exiting." >> "$LOG_FILE"
+    exit 0
+fi
+
+echo "[$(date)] Starting ansible-pull..." >> "$LOG_FILE"
+
+# Update local repository
+cd "$LOCAL_PATH"
+git fetch origin "$BRANCH" >> "$LOG_FILE" 2>&1 || {
+    echo "[$(date)] Git fetch failed, cloning fresh..." >> "$LOG_FILE"
+    rm -rf "$LOCAL_PATH"
+    git clone --branch "$BRANCH" "$REPO_URL" "$LOCAL_PATH" >> "$LOG_FILE" 2>&1
+}
+
+# Reset to remote state (idempotent)
+git reset --hard "origin/$BRANCH" >> "$LOG_FILE" 2>&1
+
+# Run Ansible playbook
+export ANSIBLE_CONFIG="$LOCAL_PATH/ansible/ansible.cfg"
+export PASSBOLT_DOMAIN="{{ passbolt_domain }}"
+export PASSBOLT_ADMIN_EMAIL="{{ passbolt_admin_email }}"
+export PASSBOLT_ADMIN_FIRST_NAME="{{ passbolt_admin_first_name }}"
+export PASSBOLT_ADMIN_LAST_NAME="{{ passbolt_admin_last_name }}"
+
+ansible-playbook \
+    -i "$LOCAL_PATH/ansible/inventory" \
+    "$LOCAL_PATH/ansible/playbooks/deploy.yml" \
+    --diff \
+    2>&1 | tee -a "$LOG_FILE"
+
+EXIT_CODE=${PIPESTATUS[0]}
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "[$(date)] Ansible-pull completed successfully." >> "$LOG_FILE"
+else
+    echo "[$(date)] Ansible-pull failed with exit code $EXIT_CODE" >> "$LOG_FILE"
+fi
+
+exit $EXIT_CODE

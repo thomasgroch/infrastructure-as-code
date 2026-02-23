@@ -2,14 +2,20 @@
 # Group variables for Passbolt servers
 
 # Passbolt configuration
-passbolt_domain: "{{ lookup('env', 'PASSBOLT_DOMAIN') | default('passbolt.local', true) }}"
+passbolt_domain: "pass.bot.stage.selections.buildaut.com.au"
 
 # Admin configuration
-passbolt_admin_email: "{{ lookup('env', 'PASSBOLT_ADMIN_EMAIL') | default('admin@' + passbolt_domain, true) }}"
-passbolt_admin_first_name: "{{ lookup('env', 'PASSBOLT_ADMIN_FIRST_NAME') | default('Admin', true) }}"
-passbolt_admin_last_name: "{{ lookup('env', 'PASSBOLT_ADMIN_LAST_NAME') | default('User', true) }}"
+passbolt_admin_email: "thomas@buildaut.com.au"
+passbolt_admin_first_name: "Thomas"
+passbolt_admin_last_name: "Buildaut"
 
-# SMTP configuration (optional)
+# Auto-update configuration
+git_repo: "https://github.com/thomasgroch/infrastructure-as-code.git"
+git_branch: "main"
+local_repo_path: "/opt/infrastructure-as-code"
+ansible_pull_log: "/var/log/ansible-pull.log"
+
+# SMTP configuration (optional - configure if needed)
 smtp_host: "{{ lookup('env', 'SMTP_HOST') | default('', true) }}"
 smtp_port: "{{ lookup('env', 'SMTP_PORT') | default('587', true) }}"
 smtp_user: "{{ lookup('env', 'SMTP_USER') | default('', true) }}"

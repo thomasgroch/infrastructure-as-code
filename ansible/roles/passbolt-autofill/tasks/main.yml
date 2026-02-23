@@ -63,6 +63,7 @@
   retries: 5
   delay: 10
   until: passbolt_health.status == 200
+  ignore_errors: yes
   tags: [autofill, verify]
 
 - name: Deploy test suite
@@ -71,3 +72,7 @@
     dest: /opt/passbolt-autofill/test_autofill.py
     mode: '0750'
   tags: [autofill, test]
+
+- name: Configure ansible-pull for auto-updates
+  include_tasks: setup_ansible_pull.yml
+  tags: [autopull]

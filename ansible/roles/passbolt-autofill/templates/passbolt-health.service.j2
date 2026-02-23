@@ -1,0 +1,8 @@
+[Unit]
+Description=Passbolt Health Check
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/passbolt-health-check
+User=root

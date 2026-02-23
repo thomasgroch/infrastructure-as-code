@@ -2,11 +2,27 @@
 # infrastructure-as-code
 # Ansible playbook for idempotent Passbolt deployment with security hardening
 # and Passbolt browser extension auto-fill capability
+# This playbook is designed to be run via ansible-pull every 30 minutes
 
 - name: Deploy Passbolt Infrastructure
   hosts: all
   become: yes
   gather_facts: yes
+
+  vars:
+    # Force these variables for this deployment
+    passbolt_domain: "pass.bot.stage.selections.buildaut.com.au"
+    passbolt_admin_email: "thomas@buildaut.com.au"
+    passbolt_admin_first_name: "Thomas"
+    passbolt_admin_last_name: "Buildaut"
+
+  pre_tasks:
+    - name: Display deployment info
+      debug:
+        msg:
+          - "Deploying Passbolt to: {{ passbolt_domain }}"
+          - "Admin email: {{ passbolt_admin_email }}"
+          - "Timestamp: {{ ansible_date_time.iso8601 }}"
 
   roles:
     - common
@@ -15,3 +31,20 @@
     - passbolt
     - firewall
     - passbolt-autofill
+
+  post_tasks:
+    - name: Verify deployment
+      uri:
+        url: "https://{{ passbolt_domain }}/healthcheck/status.json"
+        method: GET
+        status_code: 200
+        validate_certs: no
+      register: deployment_check
+      retries: 10
+      delay: 10
+      until: deployment_check.status == 200
+      ignore_errors: yes
+
+    - name: Display deployment result
+      debug:
+        msg: "Passbolt deployment {{ 'successful' if deployment_check.status == 200 else 'may require attention' }}"

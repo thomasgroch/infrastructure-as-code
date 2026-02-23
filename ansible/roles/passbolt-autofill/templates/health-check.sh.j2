@@ -1,0 +1,110 @@
+#!/bin/bash
+# Passbolt Health Check Script
+# Monitors service health and triggers recovery if needed
+
+set -e
+
+PASSBOLT_URL="https://{{ passbolt_domain }}"
+LOG_FILE="/var/log/passbolt-health.log"
+ALERT_EMAIL="{{ passbolt_admin_email }}"
+RESTART_THRESHOLD=3
+
+# Counter for consecutive failures
+FAILURE_COUNT_FILE="/var/run/passbolt-failure-count"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# Check if Passbolt is responding
+check_passbolt() {
+    local http_code
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" "$PASSBOLT_URL/healthcheck/status.json" --insecure || echo "000")
+    
+    if [ "$http_code" = "200" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Check Docker containers
+check_containers() {
+    local failed=0
+    for container in passbolt-db passbolt-app passbolt-caddy; do
+        if ! docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+            log "ERROR: Container $container is not running"
+            failed=1
+        fi
+    done
+    return $failed
+}
+
+# Get current failure count
+get_failure_count() {
+    if [ -f "$FAILURE_COUNT_FILE" ]; then
+        cat "$FAILURE_COUNT_FILE"
+    else
+        echo "0"
+    fi
+}
+
+# Set failure count
+set_failure_count() {
+    echo "$1" > "$FAILURE_COUNT_FILE"
+}
+
+# Main health check
+main() {
+    log "Starting health check..."
+    
+    local healthy=true
+    
+    if ! check_passbolt; then
+        log "WARNING: Passbolt health check failed"
+        healthy=false
+    fi
+    
+    if ! check_containers; then
+        log "WARNING: Some containers are not running"
+        healthy=false
+    fi
+    
+    if [ "$healthy" = true ]; then
+        log "Health check passed. All systems operational."
+        set_failure_count 0
+        exit 0
+    fi
+    
+    # Handle failure
+    local count
+    count=$(get_failure_count)
+    count=$((count + 1))
+    set_failure_count "$count"
+    
+    log "Failure count: $count/$RESTART_THRESHOLD"
+    
+    if [ "$count" -ge "$RESTART_THRESHOLD" ]; then
+        log "CRITICAL: Threshold reached. Attempting recovery..."
+        
+        # Restart containers
+        cd /opt/passbolt || exit 1
+        docker compose restart >> "$LOG_FILE" 2>&1 || true
+        
+        sleep 10
+        
+        # Check again
+        if check_passbolt; then
+            log "Recovery successful. Service restored."
+            set_failure_count 0
+        else
+            log "CRITICAL: Recovery failed. Manual intervention required."
+            # Send alert (if mail is configured)
+            if command -v mail >/dev/null 2>&1; then
+                echo "Passbolt service recovery failed. Check $LOG_FILE" | mail -s "[ALERT] Passbolt Down" "$ALERT_EMAIL" || true
+            fi
+        fi
+    fi
+}
+
+main "$@"
