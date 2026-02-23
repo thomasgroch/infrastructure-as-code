@@ -32,7 +32,7 @@ check_passbolt() {
 check_containers() {
     local failed=0
     for container in passbolt-db passbolt-app passbolt-caddy; do
-        if ! docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+        if ! docker ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -q "^${container}$"; then
             log "ERROR: Container $container is not running"
             failed=1
         fi
